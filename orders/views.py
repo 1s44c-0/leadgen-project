@@ -30,7 +30,7 @@ class OrderCreateView(APIView):
                     },
                     json={
                         "from": "onboarding@resend.dev",
-                        "to": ["isaacolorunfemi.dev@gmail.com"],
+                        "to": ["orders.arenaventures@gmail.com"],
                         "subject": f"New Order from {order.full_name}",
                         "html": f"""
                             <h2>New Order Received</h2>
