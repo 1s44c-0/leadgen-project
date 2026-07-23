@@ -8,7 +8,7 @@ from django.conf import settings
 class Order(models.Model):
     full_name = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=20)
-    email = models.EmailField()
+    email = models.EmailField(blank=True, null=True)
     product = models.CharField(max_length=100)
     quantity = models.PositiveIntegerField(default=1)
     address = models.TextField()
