@@ -20,6 +20,7 @@ class OrderCreateView(APIView):
         serializer = OrderSerializer(data=request.data)
         if serializer.is_valid():
             order = serializer.save()
+            print(request.data)
 
             try:
                 response = requests.post(
@@ -37,11 +38,11 @@ class OrderCreateView(APIView):
 
                             <p><strong>Name:</strong> {order.full_name}</p>
                             <p><strong>Phone:</strong> {order.phone_number}</p>
-                            <p><strong>Email:</strong> {order.email}</p>
+                            <p><strong>Email:</strong> {order.email or "Not provided"}</p>
                             <p><strong>Product:</strong> {order.product}</p>
                             <p><strong>Quantity:</strong> {order.quantity}</p>
                             <p><strong>Address:</strong> {order.address}</p>
-                            <p><strong>Note:</strong> {order.note}</p>
+                            <p><strong>Note:</strong> {order.note or "Not provided"}</p>
                         """,
                     },
                     timeout=30,
