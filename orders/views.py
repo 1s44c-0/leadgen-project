@@ -38,7 +38,6 @@ class OrderCreateView(APIView):
 
                             <p><strong>Name:</strong> {order.full_name}</p>
                             <p><strong>Phone:</strong> {order.phone_number}</p>
-                            <p><strong>Email:</strong> {order.email or "Not provided"}</p>
                             <p><strong>Product:</strong> {order.product}</p>
                             <p><strong>Quantity:</strong> {order.quantity}</p>
                             <p><strong>Address:</strong> {order.address}</p>
