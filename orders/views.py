@@ -57,3 +57,9 @@ class OrderCreateView(APIView):
                 status=status.HTTP_201_CREATED
             )
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class PaymentLinkView(APIView):
+    def get(self, request):
+        return Response({
+            "payment_url": config("PAYSTACK_PAYMENT_URL")
+        })
