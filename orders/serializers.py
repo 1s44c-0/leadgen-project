@@ -1,9 +1,32 @@
 from rest_framework import serializers
 from .models import Order
 
+
 class OrderSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(required=False, allow_blank=True)
-    
     class Meta:
         model = Order
-        fields = '__all__'
+        fields = [
+            "id",
+            "full_name",
+            "phone_number",
+            "email",
+            "product",
+            "quantity",
+            "address",
+            "note",
+            "amount",
+            "payment_method",
+            "payment_status",
+            "paystack_reference",
+            "paid_at",
+            "created_at",
+        ]
+
+        read_only_fields = [
+            "id",
+            "amount",
+            "payment_status",
+            "paystack_reference",
+            "paid_at",
+            "created_at",
+        ]
