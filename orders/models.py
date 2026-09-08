@@ -43,7 +43,9 @@ class Order(models.Model):
         default="unpaid"
     )
 
-    paystack_reference = models.CharField(
+    # Flutterwave calls this "tx_ref" - it's the unique reference
+    # we generate and send to Flutterwave when initializing payment.
+    tx_ref = models.CharField(
         max_length=100,
         unique=True,
         blank=True,

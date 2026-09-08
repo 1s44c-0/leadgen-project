@@ -17,7 +17,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "amount",
             "payment_method",
             "payment_status",
-            "paystack_reference",
+            "tx_ref",
             "paid_at",
             "created_at",
         ]
@@ -26,7 +26,7 @@ class OrderSerializer(serializers.ModelSerializer):
             "id",
             "amount",
             "payment_status",
-            "paystack_reference",
+            "tx_ref",
             "paid_at",
             "created_at",
         ]

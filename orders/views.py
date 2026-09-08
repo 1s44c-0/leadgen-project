@@ -18,7 +18,7 @@ from .serializers import OrderSerializer
 # PRODUCT PRICE
 # ============================================================
 
-PRODUCT_PRICE = 1000  # ₦1,000 per unit
+PRODUCT_PRICE = 1500  # ₦1,500 per unit
 
 
 # ============================================================
@@ -62,8 +62,8 @@ def send_order_email(order):
                     <p><strong>Payment Status:</strong>
                     {payment_status}</p>
 
-                    <p><strong>Paystack Reference:</strong>
-                    {order.paystack_reference or "N/A"}</p>
+                    <p><strong>Flutterwave Reference:</strong>
+                    {order.tx_ref or "N/A"}</p>
 
                     <p><strong>Address:</strong>
                     {order.address}</p>
@@ -86,7 +86,7 @@ def send_order_email(order):
 
 
 # ============================================================
-# CREATE ORDER + INITIALIZE PAYSTACK PAYMENT
+# CREATE ORDER + INITIALIZE FLUTTERWAVE PAYMENT
 # ============================================================
 
 class OrderCreateView(APIView):
@@ -127,7 +127,7 @@ class OrderCreateView(APIView):
             )
 
         # ----------------------------------------------------
-        # EMAIL REQUIRED FOR PAYSTACK
+        # EMAIL REQUIRED FOR FLUTTERWAVE
         # ----------------------------------------------------
 
         if not email:
@@ -146,7 +146,7 @@ class OrderCreateView(APIView):
         total_amount = PRODUCT_PRICE * quantity
 
         # ----------------------------------------------------
-        # CREATE UNIQUE PAYSTACK REFERENCE
+        # CREATE UNIQUE TRANSACTION REFERENCE
         # ----------------------------------------------------
 
         reference = (
@@ -161,18 +161,17 @@ class OrderCreateView(APIView):
             amount=total_amount,
             payment_method="online",
             payment_status="pending",
-            paystack_reference=reference,
+            tx_ref=reference,
         )
 
         # ----------------------------------------------------
-        # PAYSTACK USES KOBO
-        # ₦1,000 = 100,000 KOBO
+        # NOTE: unlike Paystack, Flutterwave takes the amount
+        # in the main currency unit (e.g. 1000 = ₦1,000), NOT
+        # in kobo. Do not multiply by 100 here.
         # ----------------------------------------------------
 
-        amount_in_kobo = int(total_amount * 100)
-
-        callback_url = config(
-            "PAYSTACK_CALLBACK_URL",
+        redirect_url = config(
+            "FLW_REDIRECT_URL",
             default=(
                 "http://127.0.0.1:8000/"
                 "api/orders/payment/callback/"
@@ -180,15 +179,15 @@ class OrderCreateView(APIView):
         )
 
         # ----------------------------------------------------
-        # GET PAYSTACK SECRET KEY
+        # GET FLUTTERWAVE SECRET KEY
         # ----------------------------------------------------
 
-        PAYSTACK_SECRET_KEY = config(
-            "PAYSTACK_SECRET_KEY",
+        FLW_SECRET_KEY = config(
+            "FLW_SECRET_KEY",
             default=""
         )
 
-        if not PAYSTACK_SECRET_KEY:
+        if not FLW_SECRET_KEY:
             order.payment_status = "failed"
             order.save(
                 update_fields=["payment_status"]
@@ -198,7 +197,7 @@ class OrderCreateView(APIView):
                 {
                     "success": False,
                     "message": (
-                        "PAYSTACK_SECRET_KEY is missing "
+                        "FLW_SECRET_KEY is missing "
                         "from the backend .env file."
                     )
                 },
@@ -206,29 +205,39 @@ class OrderCreateView(APIView):
             )
 
         # ----------------------------------------------------
-        # INITIALIZE PAYSTACK
+        # INITIALIZE FLUTTERWAVE PAYMENT
         # ----------------------------------------------------
 
         try:
 
             response = requests.post(
-                "https://api.paystack.co/transaction/initialize",
+                "https://api.flutterwave.com/v3/payments",
 
                 headers={
                     "Authorization": (
-                        f"Bearer {PAYSTACK_SECRET_KEY}"
+                        f"Bearer {FLW_SECRET_KEY}"
                     ),
                     "Content-Type": "application/json",
                 },
 
                 json={
-                    "email": email,
-                    "amount": amount_in_kobo,
+                    "tx_ref": reference,
+                    "amount": str(total_amount),
                     "currency": "NGN",
-                    "reference": reference,
-                    "callback_url": callback_url,
+                    "redirect_url": redirect_url,
 
-                    "metadata": {
+                    "customer": {
+                        "email": email,
+                        "phonenumber": order.phone_number,
+                        "name": order.full_name,
+                    },
+
+                    "customizations": {
+                        "title": "Arena Ventures Order",
+                        "description": f"Payment for {product}",
+                    },
+
+                    "meta": {
                         "order_id": order.id,
                         "full_name": order.full_name,
                         "phone_number": order.phone_number,
@@ -254,18 +263,18 @@ class OrderCreateView(APIView):
             return Response(
                 {
                     "success": False,
-                    "message": "Unable to connect to Paystack.",
+                    "message": "Unable to connect to Flutterwave.",
                     "error": str(e),
                 },
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
         # ----------------------------------------------------
-        # READ PAYSTACK RESPONSE
+        # READ FLUTTERWAVE RESPONSE
         # ----------------------------------------------------
 
         try:
-            paystack_data = response.json()
+            flw_data = response.json()
 
         except ValueError:
 
@@ -277,19 +286,19 @@ class OrderCreateView(APIView):
             return Response(
                 {
                     "success": False,
-                    "message": "Invalid response received from Paystack.",
+                    "message": "Invalid response received from Flutterwave.",
                     "response": response.text,
                 },
                 status=status.HTTP_502_BAD_GATEWAY
             )
 
         # ----------------------------------------------------
-        # CHECK PAYSTACK RESPONSE
+        # CHECK FLUTTERWAVE RESPONSE
         # ----------------------------------------------------
 
         if (
             not response.ok
-            or not paystack_data.get("status")
+            or flw_data.get("status") != "success"
         ):
 
             order.payment_status = "failed"
@@ -300,23 +309,23 @@ class OrderCreateView(APIView):
             return Response(
                 {
                     "success": False,
-                    "message": paystack_data.get(
+                    "message": flw_data.get(
                         "message",
                         "Unable to initialize payment."
                     ),
-                    "paystack_response": paystack_data,
+                    "flutterwave_response": flw_data,
                 },
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # ----------------------------------------------------
-        # GET PAYSTACK PAYMENT URL
+        # GET FLUTTERWAVE PAYMENT LINK
         # ----------------------------------------------------
 
         authorization_url = (
-            paystack_data
+            flw_data
             .get("data", {})
-            .get("authorization_url")
+            .get("link")
         )
 
         if not authorization_url:
@@ -330,10 +339,10 @@ class OrderCreateView(APIView):
                 {
                     "success": False,
                     "message": (
-                        "Paystack did not return "
-                        "a payment URL."
+                        "Flutterwave did not return "
+                        "a payment link."
                     ),
-                    "paystack_response": paystack_data,
+                    "flutterwave_response": flw_data,
                 },
                 status=status.HTTP_400_BAD_REQUEST,
             )
@@ -356,51 +365,92 @@ class OrderCreateView(APIView):
 
 
 # ============================================================
-# PAYSTACK PAYMENT CALLBACK
+# FLUTTERWAVE PAYMENT CALLBACK
 # ============================================================
 
 class PaymentCallbackView(APIView):
 
     def get(self, request):
 
-        reference = request.GET.get("reference")
+        tx_ref = request.GET.get("tx_ref")
+        flw_status = request.GET.get("status")  # successful | cancelled | failed
 
-        if not reference:
+        if not tx_ref:
             return redirect(
                 f"{config('FRONTEND_URL')}"
                 "?payment=failed"
             )
 
         # ----------------------------------------------------
-        # GET PAYSTACK SECRET KEY
+        # FIND ORDER
         # ----------------------------------------------------
 
-        PAYSTACK_SECRET_KEY = config(
-            "PAYSTACK_SECRET_KEY",
+        try:
+
+            order = Order.objects.get(
+                tx_ref=tx_ref
+            )
+
+        except Order.DoesNotExist:
+
+            return redirect(
+                f"{config('FRONTEND_URL')}"
+                "?payment=failed"
+            )
+
+        # ----------------------------------------------------
+        # IF THE USER CANCELLED ON FLUTTERWAVE'S PAGE,
+        # NO NEED TO VERIFY - JUST MARK AS FAILED
+        # ----------------------------------------------------
+
+        if flw_status == "cancelled":
+
+            order.payment_status = "failed"
+            order.save(
+                update_fields=["payment_status"]
+            )
+
+            return redirect(
+                f"{config('FRONTEND_URL')}"
+                "?payment=failed"
+            )
+
+        # ----------------------------------------------------
+        # GET FLUTTERWAVE SECRET KEY
+        # ----------------------------------------------------
+
+        FLW_SECRET_KEY = config(
+            "FLW_SECRET_KEY",
             default=""
         )
 
-        if not PAYSTACK_SECRET_KEY:
+        if not FLW_SECRET_KEY:
             return redirect(
                 f"{config('FRONTEND_URL')}"
                 "?payment=failed"
             )
 
         # ----------------------------------------------------
-        # VERIFY PAYMENT WITH PAYSTACK
+        # VERIFY PAYMENT WITH FLUTTERWAVE
+        # (verify by our own tx_ref, never trust the querystring
+        # status/amount on their own)
         # ----------------------------------------------------
 
         try:
 
             response = requests.get(
                 (
-                    "https://api.paystack.co/"
-                    f"transaction/verify/{reference}"
+                    "https://api.flutterwave.com/v3/"
+                    "transactions/verify_by_reference"
                 ),
+
+                params={
+                    "tx_ref": tx_ref,
+                },
 
                 headers={
                     "Authorization": (
-                        f"Bearer {PAYSTACK_SECRET_KEY}"
+                        f"Bearer {FLW_SECRET_KEY}"
                     ),
                 },
 
@@ -422,37 +472,25 @@ class PaymentCallbackView(APIView):
                 "?payment=failed"
             )
 
-        # ----------------------------------------------------
-        # FIND ORDER
-        # ----------------------------------------------------
-
-        try:
-
-            order = Order.objects.get(
-                paystack_reference=reference
-            )
-
-        except Order.DoesNotExist:
-
-            return redirect(
-                f"{config('FRONTEND_URL')}"
-                "?payment=failed"
-            )
-
         transaction = result.get("data", {})
 
-        transaction_status = transaction.get(
-            "status"
-        )
+        transaction_status = transaction.get("status")
+        transaction_amount = transaction.get("amount")
+        transaction_currency = transaction.get("currency")
 
         # ----------------------------------------------------
         # SUCCESSFUL PAYMENT
+        # Confirm status, amount, and currency all match to
+        # guard against tampering.
         # ----------------------------------------------------
 
         if (
             response.ok
-            and result.get("status")
-            and transaction_status == "success"
+            and result.get("status") == "success"
+            and transaction_status == "successful"
+            and transaction_currency == "NGN"
+            and transaction_amount is not None
+            and float(transaction_amount) >= float(order.amount)
         ):
 
             already_paid = (
