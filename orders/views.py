@@ -18,7 +18,7 @@ from .serializers import OrderSerializer
 # PRODUCT PRICE
 # ============================================================
 
-PRODUCT_PRICE = 2500  # ₦2,500 per unit
+PRODUCT_PRICE = 1000  # ₦2,500 per unit
 
 
 # ============================================================
