@@ -3,6 +3,10 @@ from django.db import models
 
 class Order(models.Model):
 
+    PRODUCT_CHOICES = [
+        ("Zobo", "Zobo"),
+    ]
+
     PAYMENT_METHOD_CHOICES = [
         ("online", "Pay Online"),
     ]
@@ -19,7 +23,11 @@ class Order(models.Model):
     phone_number = models.CharField(max_length=20)
     email = models.EmailField(blank=True, null=True)
 
-    product = models.CharField(max_length=100)
+    product = models.CharField(
+        max_length=100,
+        choices=PRODUCT_CHOICES,
+        default="Zobo",
+    )
     quantity = models.PositiveIntegerField(default=1)
     address = models.TextField()
     note = models.TextField(blank=True, null=True)
@@ -28,7 +36,7 @@ class Order(models.Model):
     amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        default=1000.00
+        default=2500.00
     )
 
     payment_method = models.CharField(

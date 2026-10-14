@@ -18,7 +18,7 @@ from .serializers import OrderSerializer
 # PRODUCT PRICE
 # ============================================================
 
-PRODUCT_PRICE = 1500  # ₦1,500 per unit
+PRODUCT_PRICE = 2500  # ₦2,500 per unit
 
 
 # ============================================================
@@ -106,25 +106,6 @@ class OrderCreateView(APIView):
         product = data.get("product")
         quantity = data.get("quantity", 1)
         email = data.get("email")
-
-        # ----------------------------------------------------
-        # PRODUCTS CURRENTLY AVAILABLE
-        # ----------------------------------------------------
-
-        allowed_products = [
-            "Pepsi",
-            "RC Cola",
-            "American Cola",
-        ]
-
-        if product not in allowed_products:
-            return Response(
-                {
-                    "success": False,
-                    "message": "Invalid product."
-                },
-                status=status.HTTP_400_BAD_REQUEST
-            )
 
         # ----------------------------------------------------
         # EMAIL REQUIRED FOR FLUTTERWAVE
